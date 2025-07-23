@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+ultralytics==8.0.214
+easyocr
+opencv-python-headless
+python-multipart
+torch==2.5.1
