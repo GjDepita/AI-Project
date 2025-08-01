@@ -1,0 +1,25 @@
+# Python virtual environments
+venv/
+backend/venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# macOS files
+*.DS_Store
+
+# Environment files
+.env
+
+# Node and frontend builds
+node_modules/
+dist/
+
+# Ignore model output folders
+backend/weights/runs/
+
+# Ignore logs
+backend/logs/

@@ -1,43 +1,53 @@
+# app/yolov8_ocr.py
+
 import easyocr
-import cv2
 import numpy as np
+from PIL import Image
+import io
+import re
 
-import torch
-from torch.serialization import add_safe_globals
-import torch.nn.modules.container as container
-import torch.nn.modules.conv as torch_conv
-import ultralytics.nn.tasks as tasks
-import ultralytics.nn.modules.conv as ultra_conv
-import torch.nn.modules.batchnorm as batchnorm
+# Initialize EasyOCR with detection enabled
+ocr_reader = easyocr.Reader(["en"], detector=True)
 
-# Allowlist required classes/functions for model unpickling
-add_safe_globals([
-    tasks.DetectionModel,
-    container.Sequential,
-    ultra_conv.Conv,
-    torch_conv.Conv2d,
-    batchnorm.BatchNorm2d,
-])
+# Clean + validate logic
+def clean_text(text: str) -> str:
+    return text.strip().replace(" ", "").upper()
 
-from ultralytics import YOLO
+def is_valid_serial(text: str) -> bool:
+    if len(text) < 6:
+        return False
+    if not re.search(r'[A-Z]', text):
+        return False
+    if not re.search(r'[0-9]', text):
+        return False
+    junk_words = ["FC", "PATP", "ROHS", "CE", "CHINA"]
+    return text not in junk_words
 
-model = YOLO("weights/best.pt")
-reader = easyocr.Reader(['en'])
+# 🎯 This is the function your FastAPI app imports
+def detect_serial_number(image_bytes: bytes):
+    try:
+        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img_np = np.array(image)
 
-def detect_serial_number(image_bytes):
-    np_img = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-    results = model.predict(img)[0]
+        ocr_results = ocr_reader.readtext(img_np)
 
-    serials = []
-    for box in results.boxes:
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-        roi = img[y1:y2, x1:x2]
-        ocr_result = reader.readtext(roi)
-        text = ' '.join([r[1] for r in ocr_result])
-        serials.append({
-            "box": [x1, y1, x2, y2],
-            "text": text
-        })
+        serials = []
+        raw_ocr = []
 
-    return serials
+        for _, text, _ in ocr_results:
+            cleaned = clean_text(text)
+            raw_ocr.append(cleaned)
+            if is_valid_serial(cleaned):
+                serials.append(cleaned)
+
+        return {
+            "serials": serials,
+            "raw_ocr": raw_ocr
+        }
+
+    except Exception as e:
+        return {
+            "serials": [],
+            "raw_ocr": [],
+            "error": str(e)
+        }
