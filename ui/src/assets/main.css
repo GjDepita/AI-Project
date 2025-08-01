@@ -1,5 +1,9 @@
 @import './base.css';
 
+.router-link-exact-active {
+  color: #fff;
+  background-color: #4a90e2;
+}
 /* #app {
   max-width: 1280px;
   margin: 0 auto;

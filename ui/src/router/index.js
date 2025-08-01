@@ -3,14 +3,15 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import Home from '@/views/HomeView.vue'
 import Cropper from '@/views/CropperPage.vue'
 import About from '@/views/AboutView.vue'
+import TrainModel from '@/views/TrainModel.vue'
 
 const routes = [
   {
     path: '/',
     component: DefaultLayout,
     children: [
-      { path: '', component: Cropper },
-      // { path: 'cropper', component: Cropper },
+      { path: ' ', component: Cropper },
+      { path: 'train-model', component: TrainModel },
       // { path: 'about', component: About },
     ],
   },

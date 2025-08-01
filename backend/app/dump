@@ -1,0 +1,108 @@
+import easyocr
+import numpy as np
+import cv2
+from PIL import Image
+import io
+import re
+from typing import List, Dict, Union
+
+# Initialize EasyOCR reader
+ocr_reader = easyocr.Reader(["en"], detector=True)
+
+# Preprocessing for faint/engraved text
+def preprocess_image(image: Image.Image):
+    img_np = np.array(image.convert("RGB"))
+    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+
+    # Apply CLAHE
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    enhanced = clahe.apply(gray)
+
+    # Apply adaptive thresholding
+    thresh = cv2.adaptiveThreshold(
+        enhanced, 255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY, 11, 2
+    )
+
+    # Optional: Apply dilation to emphasize thin text
+    kernel = np.ones((1, 1), np.uint8)
+    dilated = cv2.dilate(thresh, kernel, iterations=1)
+
+    return dilated
+
+# Mapping of commonly misread characters
+CHAR_FIX_MAP = {
+    'O': '0',
+    'I': '1',
+    'L': '1',
+    'Z': '2',
+    'S': '5',
+    'B': '8',
+    'Q': '0',
+    'D': '0',
+    'G': '6',
+    '|': '1',
+    '(': 'C',
+    ')': 'D',
+    ' ': '',
+    '-': '',
+    '>': '',
+    ':': '',
+    ';': '',
+    '.': '',
+    ',': '',
+    '/': '',
+    '\\': '',
+}
+
+def smart_fix(text: str) -> str:
+    return ''.join(CHAR_FIX_MAP.get(char, char) for char in text.upper())
+
+def clean_text(text: str) -> str:
+    return smart_fix(text.replace(" ", "").replace("\n", "").strip())
+
+def matches_serial_format(text: str):
+    return re.match(r"^[A-Z0-9]{5,}$", text)
+
+def run_ocr(image_bytes: bytes) -> Dict[str, List[Dict[str, Union[str, float]]]]:
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    np_image = np.array(image)
+
+    # Optionally apply preprocessing here:
+    # preprocessed = preprocess_image(image)
+    # results = ocr_reader.readtext(preprocessed)
+
+    results = ocr_reader.readtext(np_image)
+
+    serial_pattern = re.compile(r"[A-Z0-9]{5,}", re.IGNORECASE)
+    raw_output = []
+    detected = []
+
+    for (bbox, text, conf) in results:
+        cleaned = clean_text(text)
+
+        print(f"[DEBUG] OCR (original): {text} → {cleaned} (Conf: {conf:.2f})")
+
+        raw_output.append({
+            "original": text,
+            "cleaned": cleaned,
+            "confidence": round(conf, 2)
+        })
+
+        if serial_pattern.fullmatch(cleaned):
+            print(f"[MATCH] ✅ {cleaned} matched the pattern!")
+            detected.append({
+                "text": cleaned,
+                "confidence": round(conf, 2)
+            })
+        else:
+            print(f"[NO MATCH] ❌ {cleaned} did NOT match.")
+
+    return {
+        "detected": detected,
+        "raw": raw_output
+    }
+
+def detect_serial_number(image_bytes: bytes):
+    return run_ocr(image_bytes)
